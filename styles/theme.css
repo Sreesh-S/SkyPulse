@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    50%       { transform: translateY(-10px) rotate(3deg); }
+}
+@keyframes pulseGlow {
+    0%   { transform: scale(1);    opacity: 0.4; }
+    100% { transform: scale(1.15); opacity: 0.8; }
+}
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.animated-weather-icon {
+    animation: float 4s ease-in-out infinite;
+}
+.fade-in-up {
+    animation: fadeInUp 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.hourly-scroll-container {
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    padding: 8px 4px 16px 4px;
+    scrollbar-width: thin;
+}
+.hourly-card {
+    min-width: 110px;
+    border-radius: 20px;
+    padding: 16px 12px;
+    text-align: center;
+    flex-shrink: 0;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    cursor: pointer;
+}
+.day-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-radius: 20px;
+    padding: 18px 24px;
+    margin-bottom: 12px;
+    transition: all 0.25s ease;
+}
