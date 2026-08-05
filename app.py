@@ -544,6 +544,8 @@ CITY_SUGGESTIONS = [
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 8.  GEOLOCATION BUTTON  (srcdoc iframe via components.v1.html)
+# Uses postMessage to communicate coords to parent — works on Streamlit Cloud
+# where cross-origin iframe access to window.top.location is blocked.
 # ─────────────────────────────────────────────────────────────────────────────
 _GEO_HTML = f"""
 <!DOCTYPE html><html><head><style>
@@ -583,12 +585,15 @@ ready(function() {{
   status = document.getElementById('s');
 }});
 
+// Send coords to parent via postMessage (works even in sandboxed iframes)
 function navigate(lat, lon) {{
   if (done) return;
   done = true;
   status.innerText = 'Found! Loading…';
-  var top = window.top || window.parent || window;
-  top.location.href = top.location.pathname + '?lat=' + lat + '&lon=' + lon;
+  var payload = {{ type: 'SKYPULSE_GEO', lat: lat, lon: lon }};
+  // Try all parent references to ensure delivery
+  try {{ window.parent.postMessage(payload, '*'); }} catch(e) {{}}
+  try {{ window.top.postMessage(payload, '*'); }} catch(e) {{}}
 }}
 
 function fail(msg) {{
@@ -600,7 +605,6 @@ function fail(msg) {{
 }}
 
 function tryIP1() {{
-  // Primary IP API: ipwho.is
   fetch('https://ipwho.is/')
     .then(function(r) {{ return r.json(); }})
     .then(function(d) {{
@@ -614,7 +618,6 @@ function tryIP1() {{
 }}
 
 function tryIP2() {{
-  // Fallback IP API: ip-api.com
   fetch('https://ip-api.com/json/?fields=status,lat,lon')
     .then(function(r) {{ return r.json(); }})
     .then(function(d) {{
@@ -635,30 +638,47 @@ function go() {{
   status.innerText = 'Getting your location…';
   done = false;
 
-  // Try GPS first (works if browser allows it in iframe)
-  var geoApi = null;
-  try {{ geoApi = navigator.geolocation; }} catch(e) {{}}
-  try {{ if (!geoApi) geoApi = (window.parent || window).navigator.geolocation; }} catch(e) {{}}
-
-  if (geoApi) {{
-    geoApi.getCurrentPosition(
+  // GPS via navigator.geolocation (browser will ask permission)
+  if (navigator.geolocation) {{
+    navigator.geolocation.getCurrentPosition(
       function(pos) {{
         navigate(pos.coords.latitude.toFixed(6), pos.coords.longitude.toFixed(6));
       }},
-      function() {{
-        // GPS blocked/denied — IP fallback already running in parallel
+      function(err) {{
+        // GPS denied or unavailable — IP fallback already running
       }},
-      {{ enableHighAccuracy:false, timeout:5000, maximumAge:60000 }}
+      {{ enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }}
     );
   }}
 
-  // Run IP lookup in parallel (race — whichever resolves first wins)
+  // IP-based fallback runs in parallel
   tryIP1();
 
-  // Safety timeout: if nothing resolved after 12s, fail gracefully
-  setTimeout(function() {{ if (!done) fail('Timed out. Please search manually.'); }}, 12000);
+  // Safety net: give up after 15s
+  setTimeout(function() {{ if (!done) fail('Timed out. Please search manually.'); }}, 15000);
 }}
 </script></body></html>
+"""
+
+# Parent-side postMessage listener injected into Streamlit page.
+# Receives {{ type: 'SKYPULSE_GEO', lat, lon }} from the iframe and
+# navigates the top-level window to ?lat=...&lon=... to trigger st.query_params.
+_GEO_LISTENER_JS = """
+<script>
+(function() {{
+  if (window.__skypulseGeoListenerActive) return;
+  window.__skypulseGeoListenerActive = true;
+  window.addEventListener('message', function(event) {{
+    if (!event.data || event.data.type !== 'SKYPULSE_GEO') return;
+    var lat = event.data.lat;
+    var lon = event.data.lon;
+    if (lat && lon) {{
+      var url = window.location.pathname + '?lat=' + lat + '&lon=' + lon;
+      window.location.href = url;
+    }}
+  }}, false);
+}})();
+</script>
 """
 
 
@@ -700,6 +720,9 @@ if not st.session_state.has_searched:
     }}
     </style>
     """, unsafe_allow_html=True)
+
+    # ── Inject parent postMessage listener for geolocation ──
+    st.markdown(_GEO_LISTENER_JS, unsafe_allow_html=True)
 
     # ── Top spacer (~25% viewport height) ──
     st.markdown("<div style='height:18vh;'></div>", unsafe_allow_html=True)
