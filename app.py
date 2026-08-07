@@ -720,114 +720,133 @@ if not st.session_state.has_searched:
     </style>
     """, unsafe_allow_html=True)
 
-    # ── Stunning canvas-based weather animation ──
-    # Uses components.html (same-origin srcdoc iframe) to inject canvas
-    # into window.parent.document — the actual Streamlit page DOM.
+    # ── Animated weather background — pure CSS (guaranteed to work in Streamlit Cloud) ──
+    # st.markdown DOES render <style> and animated HTML; only <script> is blocked.
+    import random as _rng
+    _rng.seed(7)
     _dark = is_dark
-    _bg0 = "#060c18" if _dark else "#0e4fa3"
-    _bg1 = "#0a1628" if _dark else "#1a6abf"
-    _bg2 = "#0d1f3c" if _dark else "#2d8dd4"
-    _dark_js = "true" if _dark else "false"
 
-    components.html(f"""<!DOCTYPE html><html><head>
-<style>html,body{{margin:0;padding:0;background:transparent;width:1px;height:1px;overflow:hidden;}}</style>
-</head><body><script>
-(function(){{
-  var pw=window.parent||window, pd=pw.document;
-  var sid='sp-bg-style';
-  var old=pd.getElementById(sid); if(old) old.remove();
-  var s=pd.createElement('style'); s.id=sid;
-  s.textContent='body,.stApp,[data-testid="stAppViewContainer"],[data-testid="stMain"],[data-testid="stMainBlockContainer"],.main,.main>div{{background:transparent!important;}}#sp-canvas{{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;pointer-events:none;display:block;}}';
-  pd.head.appendChild(s);
-  var C=pd.getElementById('sp-canvas');
-  if(!C){{C=pd.createElement('canvas');C.id='sp-canvas';pd.body.insertBefore(C,pd.body.firstChild);}}
-  if(C._raf) pw.cancelAnimationFrame(C._raf);
-  var X=C.getContext('2d'),W=0,H=0,t=0,DARK={_dark_js};
-  function resize(){{W=C.width=pw.innerWidth;H=C.height=pw.innerHeight;}}
-  resize(); pw.addEventListener('resize',resize);
-  var orbs=[
-    {{x:0.15,y:0.20,r:0.55,c:'37,99,235',  vx:0.00025,vy:0.00018}},
-    {{x:0.82,y:0.65,r:0.48,c:'6,182,212',  vx:-0.00018,vy:0.00025}},
-    {{x:0.50,y:0.88,r:0.40,c:'124,58,237', vx:0.00010,vy:-0.00030}},
-    {{x:0.08,y:0.75,r:0.35,c:'16,185,129', vx:0.00030,vy:0.00012}},
-    {{x:0.70,y:0.10,r:0.30,c:'239,68,68',  vx:-0.00020,vy:0.00022}}
-  ];
-  var rain=[];
-  for(var i=0;i<(DARK?160:120);i++) rain.push(mkDrop(true));
-  function mkDrop(rnd){{return{{x:Math.random()*1.2-0.1,y:rnd?Math.random():-0.05,len:0.025+Math.random()*0.055,spd:0.004+Math.random()*0.009,op:0.15+Math.random()*0.65,w:0.6+Math.random()*1.4,glow:Math.random()<0.25}};}}
-  var bolt=null,bFlash=0,bTimer=0,bInt=220+Math.random()*300;
-  function mkBolt(x1,y1,x2,y2,d){{
-    if(d===0) return [[x1,y1,x2,y2]];
-    var mx=(x1+x2)/2+(Math.random()-0.5)*0.14,my=(y1+y2)/2+(Math.random()-0.5)*0.04;
-    var seg=[].concat(mkBolt(x1,y1,mx,my,d-1)).concat(mkBolt(mx,my,x2,y2,d-1));
-    if(d>1&&Math.random()<0.45){{var bx=mx+(Math.random()-0.3)*0.18,by=my+Math.random()*0.18;seg=seg.concat(mkBolt(mx,my,bx,by,d-2));}}
-    return seg;
-  }}
-  var clouds=[];
-  for(var i=0;i<5;i++) clouds.push(mkCloud(true));
-  function mkCloud(rnd){{return{{x:rnd?Math.random()*1.8-0.4:-0.45,y:0.04+Math.random()*0.38,spd:0.000055+Math.random()*0.00012,sc:0.9+Math.random()*1.6,op:DARK?0.035+Math.random()*0.07:0.55+Math.random()*0.30}};}}
-  function drawCloud(cx,cy,sc,op){{
-    var bx=cx*W,by=cy*H,sz=sc*140;
-    X.save();X.globalAlpha=op;X.fillStyle=DARK?'rgba(160,200,255,1)':'rgba(255,255,255,1)';X.shadowColor=DARK?'rgba(96,165,250,0.6)':'rgba(200,230,255,0.9)';X.shadowBlur=DARK?22:35;
-    X.beginPath();X.arc(bx,by,sz*0.48,0,Math.PI*2);X.arc(bx+sz*0.42,by-sz*0.12,sz*0.38,0,Math.PI*2);X.arc(bx-sz*0.30,by+sz*0.05,sz*0.32,0,Math.PI*2);X.arc(bx+sz*0.75,by+sz*0.08,sz*0.30,0,Math.PI*2);
-    X.fill();X.restore();
-  }}
-  var pts=[];
-  for(var i=0;i<55;i++) pts.push(mkPt());
-  function mkPt(){{
-    var cols=DARK?[['96,165,250'],['34,211,238'],['167,139,250'],['52,211,153']]:[['255,255,255'],['186,230,253'],['224,242,254'],['147,197,253']];
-    var c=cols[Math.floor(Math.random()*cols.length)][0];
-    return{{x:Math.random(),y:Math.random(),r:0.8+Math.random()*2.2,vx:(Math.random()-0.5)*0.00025,vy:(Math.random()-0.5)*0.00025,op:0.25+Math.random()*0.65,ph:Math.random()*Math.PI*2,spd:0.012+Math.random()*0.025,c:c}};
-  }}
-  var shoots=[],sTimer=0,sInt=140+Math.random()*200;
-  function mkShoot(){{return{{x:Math.random()*0.7,y:Math.random()*0.4,vx:0.008+Math.random()*0.012,vy:0.003+Math.random()*0.006,life:1,decay:0.03+Math.random()*0.04,len:0.08+Math.random()*0.10}};}}
-  function draw(){{
-    t++;X.clearRect(0,0,W,H);
-    var bg=X.createLinearGradient(0,0,W,H);
-    bg.addColorStop(0,'{_bg0}');bg.addColorStop(0.5,'{_bg1}');bg.addColorStop(1,'{_bg2}');
-    X.fillStyle=bg;X.fillRect(0,0,W,H);
-    orbs.forEach(function(o){{
-      o.x+=o.vx+Math.sin(t*0.008+o.y*3)*0.00008;o.y+=o.vy+Math.cos(t*0.010+o.x*3)*0.00006;
-      if(o.x<-0.1||o.x>1.1)o.vx*=-1;if(o.y<-0.1||o.y>1.1)o.vy*=-1;
-      var pulse=1+Math.sin(t*0.018+o.x*4)*0.12;
-      var g=X.createRadialGradient(o.x*W,o.y*H,0,o.x*W,o.y*H,o.r*Math.min(W,H)*pulse);
-      g.addColorStop(0,'rgba('+o.c+','+(DARK?0.52:0.38)+')');g.addColorStop(0.5,'rgba('+o.c+','+(DARK?0.18:0.10)+')');g.addColorStop(1,'rgba('+o.c+',0)');
-      X.fillStyle=g;X.fillRect(0,0,W,H);
-    }});
-    clouds.forEach(function(c,i){{c.x+=c.spd;if(c.x>1.5)clouds[i]=mkCloud(false);drawCloud(c.x,c.y,c.sc,c.op*(0.7+0.3*Math.sin(t*0.005+i)));}}); 
-    rain.forEach(function(d,i){{
-      d.y+=d.spd;d.x-=d.spd*0.22;if(d.y>1.05){{rain[i]=mkDrop(false);return;}}
-      X.save();if(d.glow){{X.shadowColor='rgba(96,165,250,0.9)';X.shadowBlur=8;}}
-      var rc=DARK?'147,197,253':'255,255,255';
-      var gr=X.createLinearGradient(d.x*W,d.y*H,d.x*W-d.len*W*0.22,(d.y+d.len)*H);
-      gr.addColorStop(0,'rgba('+rc+',0)');gr.addColorStop(1,'rgba('+rc+','+d.op+')');
-      X.strokeStyle=gr;X.lineWidth=d.w;X.lineCap='round';
-      X.beginPath();X.moveTo(d.x*W,d.y*H);X.lineTo(d.x*W-d.len*W*0.22,(d.y+d.len)*H);X.stroke();X.restore();
-    }});
-    sTimer++;if(sTimer>sInt){{shoots.push(mkShoot());sTimer=0;sInt=140+Math.random()*200;}}
-    shoots=shoots.filter(function(s){{
-      X.save();X.globalAlpha=s.life*0.9;X.strokeStyle=DARK?'rgba(255,255,255,1)':'rgba(255,255,255,0.95)';X.shadowColor='rgba(200,230,255,1)';X.shadowBlur=12;X.lineWidth=1.5;
-      X.beginPath();X.moveTo(s.x*W,s.y*H);X.lineTo((s.x-s.len)*W,(s.y-s.len*0.4)*H);X.stroke();X.restore();
-      s.x+=s.vx;s.y+=s.vy;s.life-=s.decay;return s.life>0;
-    }});
-    bTimer++;if(bTimer>bInt){{var lx=0.2+Math.random()*0.6;bolt=mkBolt(lx,0,lx+(Math.random()-0.5)*0.25,0.65,6);bFlash=14;bTimer=0;bInt=200+Math.random()*420;}}
-    if(bolt&&bFlash>0){{
-      X.fillStyle='rgba(180,220,255,'+(bFlash/14*0.18)+')';X.fillRect(0,0,W,H);
-      var al=bFlash/14;
-      bolt.forEach(function(seg){{X.save();X.strokeStyle='rgba(255,255,255,'+al+')';X.lineWidth=bFlash>8?2.5:1.2;X.shadowColor='rgba(147,197,253,1)';X.shadowBlur=bFlash>8?30:14;X.lineCap='round';X.beginPath();X.moveTo(seg[0]*W,seg[1]*H);X.lineTo(seg[2]*W,seg[3]*H);X.stroke();X.restore();}});
-      bFlash-=1.8;if(bFlash<=0)bolt=null;
-    }}
-    pts.forEach(function(p){{
-      p.x+=p.vx+Math.sin(t*0.007+p.ph)*0.00012;p.y+=p.vy+Math.cos(t*0.009+p.ph)*0.00010;
-      if(p.x<0||p.x>1)p.vx*=-1;if(p.y<0||p.y>1)p.vy*=-1;p.ph+=p.spd;
-      var pop=p.op*(0.45+0.55*Math.sin(p.ph));
-      X.save();X.fillStyle='rgba('+p.c+','+pop+')';X.shadowColor='rgba('+p.c+',0.9)';X.shadowBlur=10;X.beginPath();X.arc(p.x*W,p.y*H,p.r,0,Math.PI*2);X.fill();X.restore();
-    }});
-    C._raf=pw.requestAnimationFrame(draw);
-  }}
-  draw();
-}})();
-</script></body></html>""", height=0, scrolling=False)
+    # Generate rain drops HTML
+    _rain_rgb  = "147,197,253" if _dark else "180,220,255"
+    _rain_html = ""
+    for _i in range(90):
+        _l  = round(_rng.uniform(0, 100), 1)
+        _ht = round(_rng.uniform(14, 65))
+        _dl = round(_rng.uniform(0, 9), 2)
+        _dr = round(_rng.uniform(0.5, 2.2), 2)
+        _op = round(_rng.uniform(0.2, 0.85), 2)
+        _w  = round(_rng.uniform(0.8, 2.0), 1)
+        _rain_html += (
+            f'<div class="spr" style="left:{_l}%;height:{_ht}px;'
+            f'animation-delay:-{_dl}s;animation-duration:{_dr}s;'
+            f'opacity:{_op};width:{_w}px"></div>'
+        )
+
+    # Generate twinkling stars HTML
+    _star_rgb  = "255,255,255" if _dark else "96,165,250"
+    _star_html = ""
+    for _i in range(65):
+        _l  = round(_rng.uniform(0, 100), 1)
+        _t  = round(_rng.uniform(0, 100), 1)
+        _sz = round(_rng.uniform(1, 3.2), 1)
+        _dl = round(_rng.uniform(0, 5), 2)
+        _dr = round(_rng.uniform(1.5, 5), 2)
+        _star_html += (
+            f'<div class="sps" style="left:{_l}%;top:{_t}%;'
+            f'width:{_sz}px;height:{_sz}px;'
+            f'animation-delay:-{_dl}s;animation-duration:{_dr}s"></div>'
+        )
+
+    # Theme colours
+    _bg_a  = "#04091a" if _dark else "#1565c0"
+    _bg_b  = "#080f22" if _dark else "#1976d2"
+    _bg_c  = "#0c1833" if _dark else "#42a5f5"
+    _orb1c = "#1a3a8a" if _dark else "#90caf9"
+    _orb2c = "#0e7a8a" if _dark else "#ce93d8"
+    _orb3c = "#4a1d96" if _dark else "#80deea"
+    _cloud = "rgba(180,210,255,0.10)" if _dark else "rgba(255,255,255,0.72)"
+
+    st.markdown(f"""
+<style>
+/* ── Strip all Streamlit backgrounds ── */
+body,.stApp,[data-testid="stAppViewContainer"],[data-testid="stMain"],
+[data-testid="stMainBlockContainer"],.main,.main>div{{background:transparent!important;}}
+.block-container{{position:relative;z-index:2!important;}}
+
+/* ── Full-screen weather BG ── */
+#sp-bg{{
+  position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;
+  background:linear-gradient(155deg,{_bg_a} 0%,{_bg_b} 50%,{_bg_c} 100%);
+  animation:bgShift 16s ease-in-out infinite alternate;
+}}
+@keyframes bgShift{{
+  0%  {{background:linear-gradient(155deg,{_bg_a} 0%,{_bg_b} 50%,{_bg_c} 100%);}}
+  50% {{background:linear-gradient(200deg,{_bg_b} 0%,{_bg_c} 40%,{_bg_a} 100%);}}
+  100%{{background:linear-gradient(240deg,{_bg_c} 0%,{_bg_a} 50%,{_bg_b} 100%);}}
+}}
+
+/* ── Aurora glow orbs ── */
+.spo{{position:absolute;border-radius:50%;filter:blur(90px);animation:orbDrift ease-in-out infinite alternate;}}
+.spo1{{width:620px;height:620px;background:{_orb1c};top:-160px;left:-160px;animation-duration:16s;opacity:0.75;}}
+.spo2{{width:520px;height:520px;background:{_orb2c};bottom:-130px;right:-120px;animation-duration:20s;animation-delay:-7s;opacity:0.65;}}
+.spo3{{width:380px;height:380px;background:{_orb3c};top:28%;left:48%;animation-duration:12s;animation-delay:-4s;opacity:0.55;}}
+@keyframes orbDrift{{
+  0%  {{transform:translate(0,0) scale(1);}}
+  33% {{transform:translate(30px,-22px) scale(1.10);}}
+  66% {{transform:translate(-15px,18px) scale(0.95);}}
+  100%{{transform:translate(20px,10px) scale(1.05);}}
+}}
+
+/* ── Drifting clouds ── */
+.spc{{
+  position:absolute;background:{_cloud};
+  border-radius:80px;filter:blur(22px);
+  animation:cloudDrift linear infinite;
+}}
+@keyframes cloudDrift{{
+  from{{transform:translateX(-320px);}}
+  to  {{transform:translateX(110vw);}}
+}}
+
+/* ── Rain drops ── */
+.spr{{
+  position:absolute;top:-70px;
+  background:linear-gradient(to bottom,transparent,rgba({_rain_rgb},0.85));
+  border-radius:2px;
+  animation:rainFall linear infinite;
+}}
+@keyframes rainFall{{
+  from{{transform:translateY(0) translateX(0);opacity:0;}}
+  5%  {{opacity:1;}}
+  95% {{opacity:1;}}
+  to  {{transform:translateY(108vh) translateX(-10px);opacity:0;}}
+}}
+
+/* ── Twinkling stars/sparkles ── */
+.sps{{
+  position:absolute;background:rgba({_star_rgb},0.9);border-radius:50%;
+  box-shadow:0 0 5px 2px rgba({_star_rgb},0.7);
+  animation:starTwinkle ease-in-out infinite alternate;
+}}
+@keyframes starTwinkle{{
+  from{{opacity:0.05;transform:scale(0.6);}}
+  to  {{opacity:1;transform:scale(1.6);}}
+}}
+</style>
+
+<div id="sp-bg">
+  <div class="spo spo1"></div>
+  <div class="spo spo2"></div>
+  <div class="spo spo3"></div>
+  <div class="spc" style="width:480px;height:95px;top:7%;animation-duration:28s;"></div>
+  <div class="spc" style="width:340px;height:70px;top:21%;animation-duration:36s;animation-delay:-11s;"></div>
+  <div class="spc" style="width:520px;height:85px;top:53%;animation-duration:31s;animation-delay:-6s;"></div>
+  <div class="spc" style="width:290px;height:58px;top:71%;animation-duration:23s;animation-delay:-17s;"></div>
+  <div class="spc" style="width:410px;height:75px;top:86%;animation-duration:40s;animation-delay:-2s;"></div>
+  {_rain_html}
+  {_star_html}
+</div>
+""", unsafe_allow_html=True)
 
 
 
