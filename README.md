@@ -11,7 +11,7 @@
 **A beautiful, real-time weather dashboard built with Streamlit and the OpenWeatherMap API.**  
 Live forecasts · Air quality · Interactive charts · Dark & Light mode
 
-🔗 **[Live Demo →](https://skypulse.streamlit.app)**
+🔗 **[Live Demo →](https://skypulse-weather-api.streamlit.app/)**
 
 </div>
 
