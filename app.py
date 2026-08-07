@@ -721,272 +721,115 @@ if not st.session_state.has_searched:
     """, unsafe_allow_html=True)
 
     # ── Stunning canvas-based weather animation ──
+    # Uses components.html (same-origin srcdoc iframe) to inject canvas
+    # into window.parent.document — the actual Streamlit page DOM.
     _dark = is_dark
     _bg0 = "#060c18" if _dark else "#0e4fa3"
     _bg1 = "#0a1628" if _dark else "#1a6abf"
     _bg2 = "#0d1f3c" if _dark else "#2d8dd4"
+    _dark_js = "true" if _dark else "false"
 
-    st.markdown(f"""
-    <style>
-    body, .stApp, [data-testid="stAppViewContainer"],
-    [data-testid="stMain"], [data-testid="stMainBlockContainer"],
-    .main, .main > div, .block-container {{
-        background: transparent !important;
+    components.html(f"""<!DOCTYPE html><html><head>
+<style>html,body{{margin:0;padding:0;background:transparent;width:1px;height:1px;overflow:hidden;}}</style>
+</head><body><script>
+(function(){{
+  var pw=window.parent||window, pd=pw.document;
+  var sid='sp-bg-style';
+  var old=pd.getElementById(sid); if(old) old.remove();
+  var s=pd.createElement('style'); s.id=sid;
+  s.textContent='body,.stApp,[data-testid="stAppViewContainer"],[data-testid="stMain"],[data-testid="stMainBlockContainer"],.main,.main>div{{background:transparent!important;}}#sp-canvas{{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;pointer-events:none;display:block;}}';
+  pd.head.appendChild(s);
+  var C=pd.getElementById('sp-canvas');
+  if(!C){{C=pd.createElement('canvas');C.id='sp-canvas';pd.body.insertBefore(C,pd.body.firstChild);}}
+  if(C._raf) pw.cancelAnimationFrame(C._raf);
+  var X=C.getContext('2d'),W=0,H=0,t=0,DARK={_dark_js};
+  function resize(){{W=C.width=pw.innerWidth;H=C.height=pw.innerHeight;}}
+  resize(); pw.addEventListener('resize',resize);
+  var orbs=[
+    {{x:0.15,y:0.20,r:0.55,c:'37,99,235',  vx:0.00025,vy:0.00018}},
+    {{x:0.82,y:0.65,r:0.48,c:'6,182,212',  vx:-0.00018,vy:0.00025}},
+    {{x:0.50,y:0.88,r:0.40,c:'124,58,237', vx:0.00010,vy:-0.00030}},
+    {{x:0.08,y:0.75,r:0.35,c:'16,185,129', vx:0.00030,vy:0.00012}},
+    {{x:0.70,y:0.10,r:0.30,c:'239,68,68',  vx:-0.00020,vy:0.00022}}
+  ];
+  var rain=[];
+  for(var i=0;i<(DARK?160:120);i++) rain.push(mkDrop(true));
+  function mkDrop(rnd){{return{{x:Math.random()*1.2-0.1,y:rnd?Math.random():-0.05,len:0.025+Math.random()*0.055,spd:0.004+Math.random()*0.009,op:0.15+Math.random()*0.65,w:0.6+Math.random()*1.4,glow:Math.random()<0.25}};}}
+  var bolt=null,bFlash=0,bTimer=0,bInt=220+Math.random()*300;
+  function mkBolt(x1,y1,x2,y2,d){{
+    if(d===0) return [[x1,y1,x2,y2]];
+    var mx=(x1+x2)/2+(Math.random()-0.5)*0.14,my=(y1+y2)/2+(Math.random()-0.5)*0.04;
+    var seg=[].concat(mkBolt(x1,y1,mx,my,d-1)).concat(mkBolt(mx,my,x2,y2,d-1));
+    if(d>1&&Math.random()<0.45){{var bx=mx+(Math.random()-0.3)*0.18,by=my+Math.random()*0.18;seg=seg.concat(mkBolt(mx,my,bx,by,d-2));}}
+    return seg;
+  }}
+  var clouds=[];
+  for(var i=0;i<5;i++) clouds.push(mkCloud(true));
+  function mkCloud(rnd){{return{{x:rnd?Math.random()*1.8-0.4:-0.45,y:0.04+Math.random()*0.38,spd:0.000055+Math.random()*0.00012,sc:0.9+Math.random()*1.6,op:DARK?0.035+Math.random()*0.07:0.55+Math.random()*0.30}};}}
+  function drawCloud(cx,cy,sc,op){{
+    var bx=cx*W,by=cy*H,sz=sc*140;
+    X.save();X.globalAlpha=op;X.fillStyle=DARK?'rgba(160,200,255,1)':'rgba(255,255,255,1)';X.shadowColor=DARK?'rgba(96,165,250,0.6)':'rgba(200,230,255,0.9)';X.shadowBlur=DARK?22:35;
+    X.beginPath();X.arc(bx,by,sz*0.48,0,Math.PI*2);X.arc(bx+sz*0.42,by-sz*0.12,sz*0.38,0,Math.PI*2);X.arc(bx-sz*0.30,by+sz*0.05,sz*0.32,0,Math.PI*2);X.arc(bx+sz*0.75,by+sz*0.08,sz*0.30,0,Math.PI*2);
+    X.fill();X.restore();
+  }}
+  var pts=[];
+  for(var i=0;i<55;i++) pts.push(mkPt());
+  function mkPt(){{
+    var cols=DARK?[['96,165,250'],['34,211,238'],['167,139,250'],['52,211,153']]:[['255,255,255'],['186,230,253'],['224,242,254'],['147,197,253']];
+    var c=cols[Math.floor(Math.random()*cols.length)][0];
+    return{{x:Math.random(),y:Math.random(),r:0.8+Math.random()*2.2,vx:(Math.random()-0.5)*0.00025,vy:(Math.random()-0.5)*0.00025,op:0.25+Math.random()*0.65,ph:Math.random()*Math.PI*2,spd:0.012+Math.random()*0.025,c:c}};
+  }}
+  var shoots=[],sTimer=0,sInt=140+Math.random()*200;
+  function mkShoot(){{return{{x:Math.random()*0.7,y:Math.random()*0.4,vx:0.008+Math.random()*0.012,vy:0.003+Math.random()*0.006,life:1,decay:0.03+Math.random()*0.04,len:0.08+Math.random()*0.10}};}}
+  function draw(){{
+    t++;X.clearRect(0,0,W,H);
+    var bg=X.createLinearGradient(0,0,W,H);
+    bg.addColorStop(0,'{_bg0}');bg.addColorStop(0.5,'{_bg1}');bg.addColorStop(1,'{_bg2}');
+    X.fillStyle=bg;X.fillRect(0,0,W,H);
+    orbs.forEach(function(o){{
+      o.x+=o.vx+Math.sin(t*0.008+o.y*3)*0.00008;o.y+=o.vy+Math.cos(t*0.010+o.x*3)*0.00006;
+      if(o.x<-0.1||o.x>1.1)o.vx*=-1;if(o.y<-0.1||o.y>1.1)o.vy*=-1;
+      var pulse=1+Math.sin(t*0.018+o.x*4)*0.12;
+      var g=X.createRadialGradient(o.x*W,o.y*H,0,o.x*W,o.y*H,o.r*Math.min(W,H)*pulse);
+      g.addColorStop(0,'rgba('+o.c+','+(DARK?0.52:0.38)+')');g.addColorStop(0.5,'rgba('+o.c+','+(DARK?0.18:0.10)+')');g.addColorStop(1,'rgba('+o.c+',0)');
+      X.fillStyle=g;X.fillRect(0,0,W,H);
+    }});
+    clouds.forEach(function(c,i){{c.x+=c.spd;if(c.x>1.5)clouds[i]=mkCloud(false);drawCloud(c.x,c.y,c.sc,c.op*(0.7+0.3*Math.sin(t*0.005+i)));}}); 
+    rain.forEach(function(d,i){{
+      d.y+=d.spd;d.x-=d.spd*0.22;if(d.y>1.05){{rain[i]=mkDrop(false);return;}}
+      X.save();if(d.glow){{X.shadowColor='rgba(96,165,250,0.9)';X.shadowBlur=8;}}
+      var rc=DARK?'147,197,253':'255,255,255';
+      var gr=X.createLinearGradient(d.x*W,d.y*H,d.x*W-d.len*W*0.22,(d.y+d.len)*H);
+      gr.addColorStop(0,'rgba('+rc+',0)');gr.addColorStop(1,'rgba('+rc+','+d.op+')');
+      X.strokeStyle=gr;X.lineWidth=d.w;X.lineCap='round';
+      X.beginPath();X.moveTo(d.x*W,d.y*H);X.lineTo(d.x*W-d.len*W*0.22,(d.y+d.len)*H);X.stroke();X.restore();
+    }});
+    sTimer++;if(sTimer>sInt){{shoots.push(mkShoot());sTimer=0;sInt=140+Math.random()*200;}}
+    shoots=shoots.filter(function(s){{
+      X.save();X.globalAlpha=s.life*0.9;X.strokeStyle=DARK?'rgba(255,255,255,1)':'rgba(255,255,255,0.95)';X.shadowColor='rgba(200,230,255,1)';X.shadowBlur=12;X.lineWidth=1.5;
+      X.beginPath();X.moveTo(s.x*W,s.y*H);X.lineTo((s.x-s.len)*W,(s.y-s.len*0.4)*H);X.stroke();X.restore();
+      s.x+=s.vx;s.y+=s.vy;s.life-=s.decay;return s.life>0;
+    }});
+    bTimer++;if(bTimer>bInt){{var lx=0.2+Math.random()*0.6;bolt=mkBolt(lx,0,lx+(Math.random()-0.5)*0.25,0.65,6);bFlash=14;bTimer=0;bInt=200+Math.random()*420;}}
+    if(bolt&&bFlash>0){{
+      X.fillStyle='rgba(180,220,255,'+(bFlash/14*0.18)+')';X.fillRect(0,0,W,H);
+      var al=bFlash/14;
+      bolt.forEach(function(seg){{X.save();X.strokeStyle='rgba(255,255,255,'+al+')';X.lineWidth=bFlash>8?2.5:1.2;X.shadowColor='rgba(147,197,253,1)';X.shadowBlur=bFlash>8?30:14;X.lineCap='round';X.beginPath();X.moveTo(seg[0]*W,seg[1]*H);X.lineTo(seg[2]*W,seg[3]*H);X.stroke();X.restore();}});
+      bFlash-=1.8;if(bFlash<=0)bolt=null;
     }}
-    #sp-master-canvas {{
-        position: fixed;
-        top: 0; left: 0;
-        width: 100vw; height: 100vh;
-        z-index: 0;
-        pointer-events: none;
-        display: block;
-    }}
-    </style>
-    <canvas id="sp-master-canvas"></canvas>
-    <script>
-    (function() {{
-      var C = document.getElementById('sp-master-canvas');
-      if (!C || C._spDone) return;
-      C._spDone = true;
-      var X = C.getContext('2d');
-      var W, H, t = 0;
+    pts.forEach(function(p){{
+      p.x+=p.vx+Math.sin(t*0.007+p.ph)*0.00012;p.y+=p.vy+Math.cos(t*0.009+p.ph)*0.00010;
+      if(p.x<0||p.x>1)p.vx*=-1;if(p.y<0||p.y>1)p.vy*=-1;p.ph+=p.spd;
+      var pop=p.op*(0.45+0.55*Math.sin(p.ph));
+      X.save();X.fillStyle='rgba('+p.c+','+pop+')';X.shadowColor='rgba('+p.c+',0.9)';X.shadowBlur=10;X.beginPath();X.arc(p.x*W,p.y*H,p.r,0,Math.PI*2);X.fill();X.restore();
+    }});
+    C._raf=pw.requestAnimationFrame(draw);
+  }}
+  draw();
+}})();
+</script></body></html>""", height=0, scrolling=False)
 
-      function resize() {{ W = C.width = window.innerWidth; H = C.height = window.innerHeight; }}
-      resize();
-      window.addEventListener('resize', resize);
 
-      var DARK = {'true' if _dark else 'false'};
-
-      /* ── Mesh gradient orbs ── */
-      var orbs = [
-        {{ x:0.15, y:0.20, r:0.55, c:[37,99,235],   vx:0.00025, vy:0.00018 }},
-        {{ x:0.82, y:0.65, r:0.48, c:[6,182,212],   vx:-0.00018,vy:0.00025 }},
-        {{ x:0.50, y:0.88, r:0.40, c:[124,58,237],  vx:0.00010, vy:-0.00030}},
-        {{ x:0.08, y:0.75, r:0.35, c:[16,185,129],  vx:0.00030, vy:0.00012 }},
-        {{ x:0.70, y:0.10, r:0.30, c:[239,68,68],   vx:-0.00020,vy:0.00022 }},
-      ];
-
-      /* ── Neon rain ── */
-      var RCOUNT = DARK ? 160 : 120;
-      var rain = [];
-      for (var i = 0; i < RCOUNT; i++) rain.push(newDrop(true));
-      function newDrop(rand) {{
-        return {{
-          x: Math.random() * 1.2 - 0.1,
-          y: rand ? Math.random() : -0.05,
-          len: 0.025 + Math.random() * 0.055,
-          spd: 0.004 + Math.random() * 0.009,
-          op:  0.15 + Math.random() * 0.65,
-          w:   0.6  + Math.random() * 1.4,
-          glow:Math.random() < 0.25,
-        }};
-      }}
-
-      /* ── Fractal lightning ── */
-      var bolt = null, bFlash = 0, bTimer = 0, bInterval = 220 + Math.random()*300;
-      function makeBolt(x1,y1,x2,y2,d) {{
-        if (d===0) return [[x1,y1,x2,y2]];
-        var mx=(x1+x2)/2+(Math.random()-0.5)*0.14, my=(y1+y2)/2+(Math.random()-0.5)*0.04;
-        var s=[].concat(makeBolt(x1,y1,mx,my,d-1)).concat(makeBolt(mx,my,x2,y2,d-1));
-        if (d>1 && Math.random()<0.45) {{
-          var bx=mx+(Math.random()-0.3)*0.18, by=my+Math.random()*0.18;
-          s=s.concat(makeBolt(mx,my,bx,by,d-2));
-        }}
-        return s;
-      }}
-
-      /* ── Cloud silhouettes ── */
-      var clouds = [];
-      for (var i=0;i<5;i++) clouds.push(newCloud(true));
-      function newCloud(rand) {{
-        return {{
-          x: rand ? Math.random()*1.8-0.4 : -0.45,
-          y: 0.04 + Math.random()*0.38,
-          spd: 0.000055 + Math.random()*0.00012,
-          sc:  0.9 + Math.random()*1.6,
-          op:  DARK ? 0.035+Math.random()*0.07 : 0.55+Math.random()*0.30,
-        }};
-      }}
-      function drawCloud(cx,cy,sc,op) {{
-        var bx=cx*W, by=cy*H, s=sc*140;
-        X.save();
-        X.globalAlpha = op;
-        X.fillStyle   = DARK ? 'rgba(160,200,255,1)' : 'rgba(255,255,255,1)';
-        X.shadowColor = DARK ? 'rgba(96,165,250,0.6)' : 'rgba(200,230,255,0.9)';
-        X.shadowBlur  = DARK ? 22 : 35;
-        X.beginPath();
-        X.arc(bx,           by,       s*0.48, 0, Math.PI*2);
-        X.arc(bx+s*0.42,   by-s*0.12, s*0.38, 0, Math.PI*2);
-        X.arc(bx-s*0.30,   by+s*0.05, s*0.32, 0, Math.PI*2);
-        X.arc(bx+s*0.75,   by+s*0.08, s*0.30, 0, Math.PI*2);
-        X.arc(bx-s*0.05,   by+s*0.15, s*0.28, 0, Math.PI*2);
-        X.fill();
-        X.restore();
-      }}
-
-      /* ── Glowing particles ── */
-      var pts = [];
-      for (var i=0;i<55;i++) pts.push(newPt());
-      function newPt() {{
-        var cols = DARK
-          ? [[96,165,250],[34,211,238],[167,139,250],[52,211,153]]
-          : [[255,255,255],[186,230,253],[224,242,254],[147,197,253]];
-        var c = cols[Math.floor(Math.random()*cols.length)];
-        return {{
-          x: Math.random(), y: Math.random(),
-          r: 0.8+Math.random()*2.2,
-          vx:(Math.random()-0.5)*0.00025,
-          vy:(Math.random()-0.5)*0.00025,
-          op:0.25+Math.random()*0.65,
-          ph:Math.random()*Math.PI*2,
-          spd:0.012+Math.random()*0.025,
-          c: c,
-        }};
-      }}
-
-      /* ── Shooting stars ── */
-      var shoots = [], shootTimer = 0, shootInterval = 140+Math.random()*200;
-      function newShoot() {{
-        return {{
-          x: Math.random()*0.7, y: Math.random()*0.4,
-          vx: 0.008+Math.random()*0.012,
-          vy: 0.003+Math.random()*0.006,
-          life: 1, decay: 0.03+Math.random()*0.04,
-          len: 0.08+Math.random()*0.10,
-        }};
-      }}
-
-      /* ═══ MAIN DRAW LOOP ═══ */
-      function draw() {{
-        t++;
-        X.clearRect(0,0,W,H);
-
-        /* — Gradient background — */
-        var bg = X.createLinearGradient(0,0,W,H);
-        bg.addColorStop(0, '{_bg0}');
-        bg.addColorStop(0.5, '{_bg1}');
-        bg.addColorStop(1, '{_bg2}');
-        X.fillStyle = bg;
-        X.fillRect(0,0,W,H);
-
-        /* — Mesh gradient orbs — */
-        orbs.forEach(function(o) {{
-          o.x += o.vx + Math.sin(t*0.008+o.y*3)*0.00008;
-          o.y += o.vy + Math.cos(t*0.010+o.x*3)*0.00006;
-          if(o.x<-0.1||o.x>1.1) o.vx*=-1;
-          if(o.y<-0.1||o.y>1.1) o.vy*=-1;
-          var pulse = 1 + Math.sin(t*0.018+o.x*4)*0.12;
-          var g = X.createRadialGradient(o.x*W,o.y*H,0, o.x*W,o.y*H, o.r*Math.min(W,H)*pulse);
-          g.addColorStop(0,'rgba('+o.c[0]+','+o.c[1]+','+o.c[2]+','+(DARK?0.52:0.38)+')');
-          g.addColorStop(0.5,'rgba('+o.c[0]+','+o.c[1]+','+o.c[2]+','+(DARK?0.18:0.10)+')');
-          g.addColorStop(1,'rgba('+o.c[0]+','+o.c[1]+','+o.c[2]+',0)');
-          X.fillStyle = g;
-          X.fillRect(0,0,W,H);
-        }});
-
-        /* — Cloud silhouettes — */
-        clouds.forEach(function(c,i) {{
-          c.x += c.spd;
-          if(c.x>1.5) {{ clouds[i]=newCloud(false); }}
-          drawCloud(c.x, c.y, c.sc, c.op*(0.7+0.3*Math.sin(t*0.005+i)));
-        }});
-
-        /* — Neon rain — */
-        rain.forEach(function(d,i) {{
-          d.y += d.spd;
-          d.x -= d.spd*0.22;
-          if(d.y>1.05) {{ rain[i]=newDrop(false); return; }}
-          X.save();
-          if(d.glow) {{ X.shadowColor='rgba(96,165,250,0.9)'; X.shadowBlur=8; }}
-          var rc = DARK ? '147,197,253' : '255,255,255';
-          var grad = X.createLinearGradient(d.x*W, d.y*H, d.x*W - d.len*W*0.22, (d.y+d.len)*H);
-          grad.addColorStop(0,'rgba('+rc+',0)');
-          grad.addColorStop(1,'rgba('+rc+','+d.op+')');
-          X.strokeStyle = grad;
-          X.lineWidth   = d.w;
-          X.lineCap     = 'round';
-          X.beginPath();
-          X.moveTo(d.x*W, d.y*H);
-          X.lineTo(d.x*W - d.len*W*0.22, (d.y+d.len)*H);
-          X.stroke();
-          X.restore();
-        }});
-
-        /* — Shooting stars — */
-        shootTimer++;
-        if(shootTimer>shootInterval) {{
-          shoots.push(newShoot());
-          shootTimer=0;
-          shootInterval=140+Math.random()*200;
-        }}
-        shoots = shoots.filter(function(s) {{
-          X.save();
-          X.globalAlpha = s.life*0.9;
-          X.strokeStyle = DARK?'rgba(255,255,255,1)':'rgba(255,255,255,0.95)';
-          X.shadowColor = 'rgba(200,230,255,1)';
-          X.shadowBlur  = 12;
-          X.lineWidth   = 1.5;
-          X.beginPath();
-          X.moveTo(s.x*W, s.y*H);
-          X.lineTo((s.x-s.len)*W, (s.y-s.len*0.4)*H);
-          X.stroke();
-          X.restore();
-          s.x+=s.vx; s.y+=s.vy; s.life-=s.decay;
-          return s.life>0;
-        }});
-
-        /* — Lightning — */
-        bTimer++;
-        if(bTimer>bInterval) {{
-          var lx=0.2+Math.random()*0.6;
-          bolt=makeBolt(lx,0,lx+(Math.random()-0.5)*0.25,0.65,6);
-          bFlash=14; bTimer=0; bInterval=200+Math.random()*420;
-        }}
-        if(bolt&&bFlash>0) {{
-          X.fillStyle='rgba(180,220,255,'+(bFlash/14*0.18)+')';
-          X.fillRect(0,0,W,H);
-          var alpha=bFlash/14;
-          bolt.forEach(function(seg) {{
-            X.save();
-            X.strokeStyle='rgba(255,255,255,'+alpha+')';
-            X.lineWidth  = bFlash>8?2.5:1.2;
-            X.shadowColor='rgba(147,197,253,1)';
-            X.shadowBlur = bFlash>8?30:14;
-            X.lineCap='round';
-            X.beginPath();
-            X.moveTo(seg[0]*W,seg[1]*H);
-            X.lineTo(seg[2]*W,seg[3]*H);
-            X.stroke();
-            X.restore();
-          }});
-          bFlash-=1.8;
-          if(bFlash<=0) bolt=null;
-        }}
-
-        /* — Glowing particles — */
-        pts.forEach(function(p) {{
-          p.x+=p.vx+Math.sin(t*0.007+p.ph)*0.00012;
-          p.y+=p.vy+Math.cos(t*0.009+p.ph)*0.00010;
-          if(p.x<0||p.x>1) p.vx*=-1;
-          if(p.y<0||p.y>1) p.vy*=-1;
-          p.ph+=p.spd;
-          var pop=p.op*(0.45+0.55*Math.sin(p.ph));
-          X.save();
-          X.fillStyle  ='rgba('+p.c[0]+','+p.c[1]+','+p.c[2]+','+pop+')';
-          X.shadowColor='rgba('+p.c[0]+','+p.c[1]+','+p.c[2]+',0.9)';
-          X.shadowBlur = 10;
-          X.beginPath();
-          X.arc(p.x*W,p.y*H,p.r,0,Math.PI*2);
-          X.fill();
-          X.restore();
-        }});
-
-        requestAnimationFrame(draw);
-      }}
-      draw();
-    }})();
-    </script>
-    """, unsafe_allow_html=True)
 
 
     # ── Top spacer (~25% viewport height) ──
