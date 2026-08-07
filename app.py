@@ -721,9 +721,6 @@ if not st.session_state.has_searched:
     </style>
     """, unsafe_allow_html=True)
 
-    # ── Inject parent postMessage listener for geolocation ──
-    st.markdown(_GEO_LISTENER_JS, unsafe_allow_html=True)
-
     # ── Top spacer (~25% viewport height) ──
     st.markdown("<div style='height:18vh;'></div>", unsafe_allow_html=True)
 
@@ -762,12 +759,8 @@ if not st.session_state.has_searched:
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Search + Geolocation buttons ──
-    b1, b2 = st.columns([1, 1])
-    with b1:
-        search_go = st.button("🔍 Search Weather", use_container_width=True, key="land_search_btn")
-    with b2:
-        geo_button(44)
+    # ── Search button ──
+    search_go = st.button("🔍 Search Weather", use_container_width=True, key="land_search_btn")
 
     # Handle search submission
     if search_go and land_input.strip():
@@ -907,7 +900,7 @@ units = get_unit_symbols(st.session_state.unit_system)
 st.markdown('<div class="results-container">', unsafe_allow_html=True)
 
 # ── Search bar ─────────────────────────────────────────────────────────────
-hcol1, hcol2, hcol3 = st.columns([3, 0.9, 0.9])
+hcol1, hcol2 = st.columns([3, 0.9])
 with hcol1:
     search_input = st.text_input(
         "Search City",
@@ -921,8 +914,7 @@ with hcol1:
 with hcol2:
     search_btn = st.button("🔍 Search", use_container_width=True, key="results_search_btn")
 
-with hcol3:
-    geo_button(44)
+
 
 if search_btn and search_input.strip():
     st.session_state.selected_city    = search_input.strip()
