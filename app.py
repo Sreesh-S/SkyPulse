@@ -692,9 +692,6 @@ def _smart_suggestions(query: str, limit: int = 10) -> list:
     return (starts + contains)[:limit]
 
 
-def geo_button(height: int = 60) -> None:
-    """Geolocation button: GPS + parallel IP fallback (works even inside iframes)."""
-    components.html(_GEO_HTML, height=height, scrolling=False)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -709,7 +706,7 @@ if not st.session_state.has_searched:
     [data-testid="stAppViewContainer"],
     [data-testid="stMain"],
     body, .stApp {{
-        background: {LAND_GRAD} !important;
+        background: transparent !important;
     }}
     .block-container {{
         max-width: 680px !important;
@@ -717,12 +714,196 @@ if not st.session_state.has_searched:
         padding-left: 20px !important;
         padding-right: 20px !important;
         margin: 0 auto !important;
+        position: relative;
+        z-index: 2;
     }}
     </style>
     """, unsafe_allow_html=True)
 
+    # ── Animated weather background (canvas + CSS layer) ──
+    _dark = is_dark
+    _bg_base   = "#070d1a" if _dark else "#c8dff7"
+    _orb1      = "rgba(37,99,235,0.55)"   if _dark else "rgba(56,189,248,0.45)"
+    _orb2      = "rgba(6,182,212,0.40)"   if _dark else "rgba(99,102,241,0.30)"
+    _orb3      = "rgba(79,70,229,0.35)"   if _dark else "rgba(34,211,238,0.30)"
+    _cloud_col = "rgba(255,255,255,0.07)" if _dark else "rgba(255,255,255,0.65)"
+    _rain_col  = "rgba(147,197,253,0.35)" if _dark else "rgba(59,130,246,0.25)"
+    _star_col  = "rgba(255,255,255,0.85)" if _dark else "rgba(99,102,241,0.60)"
+
+    st.markdown(f"""
+    <style>
+    /* Kill ALL streamlit backgrounds so our canvas shows through */
+    body, .stApp, [data-testid="stAppViewContainer"],
+    [data-testid="stMain"], [data-testid="stMainBlockContainer"],
+    .main, .main > div, .block-container {{
+        background: transparent !important;
+    }}
+    #skypulse-bg {{
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        background: {_bg_base};
+        overflow: hidden;
+        pointer-events: none;
+    }}
+    /* Aurora orbs */
+    .sp-orb {{
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(80px);
+        animation: orbFloat linear infinite;
+    }}
+    .sp-orb1 {{
+        width: 520px; height: 520px;
+        background: {_orb1};
+        top: -120px; left: -100px;
+        animation-duration: 18s;
+    }}
+    .sp-orb2 {{
+        width: 420px; height: 420px;
+        background: {_orb2};
+        bottom: -80px; right: -60px;
+        animation-duration: 22s;
+        animation-delay: -7s;
+    }}
+    .sp-orb3 {{
+        width: 300px; height: 300px;
+        background: {_orb3};
+        top: 35%; left: 55%;
+        animation-duration: 15s;
+        animation-delay: -3s;
+    }}
+    @keyframes orbFloat {{
+        0%   {{ transform: translate(0px, 0px) scale(1);   }}
+        25%  {{ transform: translate(40px,-30px) scale(1.08); }}
+        50%  {{ transform: translate(20px, 50px) scale(0.95); }}
+        75%  {{ transform: translate(-30px,20px) scale(1.05); }}
+        100% {{ transform: translate(0px, 0px) scale(1);   }}
+    }}
+    /* Drifting clouds */
+    .sp-cloud {{
+        position: absolute;
+        background: {_cloud_col};
+        border-radius: 999px;
+        filter: blur(18px);
+        animation: cloudDrift linear infinite;
+    }}
+    @keyframes cloudDrift {{
+        0%   {{ transform: translateX(-120%) scaleY(1);   }}
+        50%  {{ transform: translateX(60vw)  scaleY(0.92); }}
+        100% {{ transform: translateX(130vw) scaleY(1);   }}
+    }}
+    /* Rain streaks via canvas — handled in JS below */
+    #sp-rain-canvas {{
+        position: absolute;
+        inset: 0;
+        opacity: 0.55;
+        pointer-events: none;
+    }}
+    /* Twinkling stars */
+    .sp-star {{
+        position: absolute;
+        width: 2px; height: 2px;
+        background: {_star_col};
+        border-radius: 50%;
+        animation: starTwinkle ease-in-out infinite alternate;
+    }}
+    @keyframes starTwinkle {{
+        from {{ opacity: 0.1; transform: scale(0.8); }}
+        to   {{ opacity: 1;   transform: scale(1.4); }}
+    }}
+    </style>
+
+    <div id="skypulse-bg">
+      <!-- Aurora orbs -->
+      <div class="sp-orb sp-orb1"></div>
+      <div class="sp-orb sp-orb2"></div>
+      <div class="sp-orb sp-orb3"></div>
+
+      <!-- Drifting cloud layers -->
+      <div class="sp-cloud" style="width:380px;height:80px;top:12%;animation-duration:28s;animation-delay:0s;"></div>
+      <div class="sp-cloud" style="width:260px;height:55px;top:28%;animation-duration:38s;animation-delay:-12s;"></div>
+      <div class="sp-cloud" style="width:420px;height:70px;top:55%;animation-duration:32s;animation-delay:-6s;"></div>
+      <div class="sp-cloud" style="width:200px;height:45px;top:72%;animation-duration:24s;animation-delay:-18s;"></div>
+      <div class="sp-cloud" style="width:310px;height:60px;top:85%;animation-duration:42s;animation-delay:-3s;"></div>
+
+      <!-- Rain canvas -->
+      <canvas id="sp-rain-canvas"></canvas>
+
+      <!-- Stars (shown in both modes; subtler in light mode via color) -->
+      <div id="sp-stars"></div>
+    </div>
+
+    <script>
+    (function() {{
+      /* ── Stars ── */
+      var starsEl = document.getElementById('sp-stars');
+      if (starsEl && starsEl.children.length === 0) {{
+        for (var i = 0; i < 70; i++) {{
+          var s = document.createElement('div');
+          s.className = 'sp-star';
+          s.style.left = Math.random() * 100 + 'vw';
+          s.style.top  = Math.random() * 100 + 'vh';
+          s.style.animationDuration  = (1.5 + Math.random() * 3) + 's';
+          s.style.animationDelay     = (-Math.random() * 3) + 's';
+          s.style.width  = (1 + Math.random() * 2) + 'px';
+          s.style.height = s.style.width;
+          starsEl.appendChild(s);
+        }}
+      }}
+
+      /* ── Rain canvas ── */
+      var canvas = document.getElementById('sp-rain-canvas');
+      if (canvas && !canvas._spInit) {{
+        canvas._spInit = true;
+        var ctx = canvas.getContext('2d');
+        var drops = [];
+        var NUM = 90;
+
+        function resize() {{
+          canvas.width  = window.innerWidth;
+          canvas.height = window.innerHeight;
+        }}
+        resize();
+        window.addEventListener('resize', resize);
+
+        for (var i = 0; i < NUM; i++) {{
+          drops.push({{
+            x: Math.random() * window.innerWidth,
+            y: Math.random() * window.innerHeight,
+            len: 8 + Math.random() * 18,
+            speed: 2 + Math.random() * 4,
+            opacity: 0.1 + Math.random() * 0.4
+          }});
+        }}
+
+        function draw() {{
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          drops.forEach(function(d) {{
+            ctx.beginPath();
+            ctx.moveTo(d.x, d.y);
+            ctx.lineTo(d.x - d.len * 0.18, d.y + d.len);
+            ctx.strokeStyle = '{_rain_col}'.replace('0.35)', d.opacity + ')');
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            d.y += d.speed;
+            d.x -= d.speed * 0.18;
+            if (d.y > canvas.height) {{
+              d.y = -d.len;
+              d.x = Math.random() * canvas.width;
+            }}
+          }});
+          requestAnimationFrame(draw);
+        }}
+        draw();
+      }}
+    }})();
+    </script>
+    """, unsafe_allow_html=True)
+
     # ── Top spacer (~25% viewport height) ──
     st.markdown("<div style='height:18vh;'></div>", unsafe_allow_html=True)
+
 
     # ── Logo + branding (pure HTML, no animations) ──
     st.markdown(textwrap.dedent(f"""
