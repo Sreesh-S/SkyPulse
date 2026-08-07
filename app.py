@@ -720,186 +720,274 @@ if not st.session_state.has_searched:
     </style>
     """, unsafe_allow_html=True)
 
-    # ── Animated weather background (canvas + CSS layer) ──
+    # ── Stunning canvas-based weather animation ──
     _dark = is_dark
-    _bg_base   = "#070d1a" if _dark else "#c8dff7"
-    _orb1      = "rgba(37,99,235,0.55)"   if _dark else "rgba(56,189,248,0.45)"
-    _orb2      = "rgba(6,182,212,0.40)"   if _dark else "rgba(99,102,241,0.30)"
-    _orb3      = "rgba(79,70,229,0.35)"   if _dark else "rgba(34,211,238,0.30)"
-    _cloud_col = "rgba(255,255,255,0.07)" if _dark else "rgba(255,255,255,0.65)"
-    _rain_col  = "rgba(147,197,253,0.35)" if _dark else "rgba(59,130,246,0.25)"
-    _star_col  = "rgba(255,255,255,0.85)" if _dark else "rgba(99,102,241,0.60)"
+    _bg0 = "#060c18" if _dark else "#0e4fa3"
+    _bg1 = "#0a1628" if _dark else "#1a6abf"
+    _bg2 = "#0d1f3c" if _dark else "#2d8dd4"
 
     st.markdown(f"""
     <style>
-    /* Kill ALL streamlit backgrounds so our canvas shows through */
     body, .stApp, [data-testid="stAppViewContainer"],
     [data-testid="stMain"], [data-testid="stMainBlockContainer"],
     .main, .main > div, .block-container {{
         background: transparent !important;
     }}
-    #skypulse-bg {{
+    #sp-master-canvas {{
         position: fixed;
-        inset: 0;
+        top: 0; left: 0;
+        width: 100vw; height: 100vh;
         z-index: 0;
-        background: {_bg_base};
-        overflow: hidden;
         pointer-events: none;
-    }}
-    /* Aurora orbs */
-    .sp-orb {{
-        position: absolute;
-        border-radius: 50%;
-        filter: blur(80px);
-        animation: orbFloat linear infinite;
-    }}
-    .sp-orb1 {{
-        width: 520px; height: 520px;
-        background: {_orb1};
-        top: -120px; left: -100px;
-        animation-duration: 18s;
-    }}
-    .sp-orb2 {{
-        width: 420px; height: 420px;
-        background: {_orb2};
-        bottom: -80px; right: -60px;
-        animation-duration: 22s;
-        animation-delay: -7s;
-    }}
-    .sp-orb3 {{
-        width: 300px; height: 300px;
-        background: {_orb3};
-        top: 35%; left: 55%;
-        animation-duration: 15s;
-        animation-delay: -3s;
-    }}
-    @keyframes orbFloat {{
-        0%   {{ transform: translate(0px, 0px) scale(1);   }}
-        25%  {{ transform: translate(40px,-30px) scale(1.08); }}
-        50%  {{ transform: translate(20px, 50px) scale(0.95); }}
-        75%  {{ transform: translate(-30px,20px) scale(1.05); }}
-        100% {{ transform: translate(0px, 0px) scale(1);   }}
-    }}
-    /* Drifting clouds */
-    .sp-cloud {{
-        position: absolute;
-        background: {_cloud_col};
-        border-radius: 999px;
-        filter: blur(18px);
-        animation: cloudDrift linear infinite;
-    }}
-    @keyframes cloudDrift {{
-        0%   {{ transform: translateX(-120%) scaleY(1);   }}
-        50%  {{ transform: translateX(60vw)  scaleY(0.92); }}
-        100% {{ transform: translateX(130vw) scaleY(1);   }}
-    }}
-    /* Rain streaks via canvas — handled in JS below */
-    #sp-rain-canvas {{
-        position: absolute;
-        inset: 0;
-        opacity: 0.55;
-        pointer-events: none;
-    }}
-    /* Twinkling stars */
-    .sp-star {{
-        position: absolute;
-        width: 2px; height: 2px;
-        background: {_star_col};
-        border-radius: 50%;
-        animation: starTwinkle ease-in-out infinite alternate;
-    }}
-    @keyframes starTwinkle {{
-        from {{ opacity: 0.1; transform: scale(0.8); }}
-        to   {{ opacity: 1;   transform: scale(1.4); }}
+        display: block;
     }}
     </style>
-
-    <div id="skypulse-bg">
-      <!-- Aurora orbs -->
-      <div class="sp-orb sp-orb1"></div>
-      <div class="sp-orb sp-orb2"></div>
-      <div class="sp-orb sp-orb3"></div>
-
-      <!-- Drifting cloud layers -->
-      <div class="sp-cloud" style="width:380px;height:80px;top:12%;animation-duration:28s;animation-delay:0s;"></div>
-      <div class="sp-cloud" style="width:260px;height:55px;top:28%;animation-duration:38s;animation-delay:-12s;"></div>
-      <div class="sp-cloud" style="width:420px;height:70px;top:55%;animation-duration:32s;animation-delay:-6s;"></div>
-      <div class="sp-cloud" style="width:200px;height:45px;top:72%;animation-duration:24s;animation-delay:-18s;"></div>
-      <div class="sp-cloud" style="width:310px;height:60px;top:85%;animation-duration:42s;animation-delay:-3s;"></div>
-
-      <!-- Rain canvas -->
-      <canvas id="sp-rain-canvas"></canvas>
-
-      <!-- Stars (shown in both modes; subtler in light mode via color) -->
-      <div id="sp-stars"></div>
-    </div>
-
+    <canvas id="sp-master-canvas"></canvas>
     <script>
     (function() {{
-      /* ── Stars ── */
-      var starsEl = document.getElementById('sp-stars');
-      if (starsEl && starsEl.children.length === 0) {{
-        for (var i = 0; i < 70; i++) {{
-          var s = document.createElement('div');
-          s.className = 'sp-star';
-          s.style.left = Math.random() * 100 + 'vw';
-          s.style.top  = Math.random() * 100 + 'vh';
-          s.style.animationDuration  = (1.5 + Math.random() * 3) + 's';
-          s.style.animationDelay     = (-Math.random() * 3) + 's';
-          s.style.width  = (1 + Math.random() * 2) + 'px';
-          s.style.height = s.style.width;
-          starsEl.appendChild(s);
-        }}
+      var C = document.getElementById('sp-master-canvas');
+      if (!C || C._spDone) return;
+      C._spDone = true;
+      var X = C.getContext('2d');
+      var W, H, t = 0;
+
+      function resize() {{ W = C.width = window.innerWidth; H = C.height = window.innerHeight; }}
+      resize();
+      window.addEventListener('resize', resize);
+
+      var DARK = {'true' if _dark else 'false'};
+
+      /* ── Mesh gradient orbs ── */
+      var orbs = [
+        {{ x:0.15, y:0.20, r:0.55, c:[37,99,235],   vx:0.00025, vy:0.00018 }},
+        {{ x:0.82, y:0.65, r:0.48, c:[6,182,212],   vx:-0.00018,vy:0.00025 }},
+        {{ x:0.50, y:0.88, r:0.40, c:[124,58,237],  vx:0.00010, vy:-0.00030}},
+        {{ x:0.08, y:0.75, r:0.35, c:[16,185,129],  vx:0.00030, vy:0.00012 }},
+        {{ x:0.70, y:0.10, r:0.30, c:[239,68,68],   vx:-0.00020,vy:0.00022 }},
+      ];
+
+      /* ── Neon rain ── */
+      var RCOUNT = DARK ? 160 : 120;
+      var rain = [];
+      for (var i = 0; i < RCOUNT; i++) rain.push(newDrop(true));
+      function newDrop(rand) {{
+        return {{
+          x: Math.random() * 1.2 - 0.1,
+          y: rand ? Math.random() : -0.05,
+          len: 0.025 + Math.random() * 0.055,
+          spd: 0.004 + Math.random() * 0.009,
+          op:  0.15 + Math.random() * 0.65,
+          w:   0.6  + Math.random() * 1.4,
+          glow:Math.random() < 0.25,
+        }};
       }}
 
-      /* ── Rain canvas ── */
-      var canvas = document.getElementById('sp-rain-canvas');
-      if (canvas && !canvas._spInit) {{
-        canvas._spInit = true;
-        var ctx = canvas.getContext('2d');
-        var drops = [];
-        var NUM = 90;
-
-        function resize() {{
-          canvas.width  = window.innerWidth;
-          canvas.height = window.innerHeight;
+      /* ── Fractal lightning ── */
+      var bolt = null, bFlash = 0, bTimer = 0, bInterval = 220 + Math.random()*300;
+      function makeBolt(x1,y1,x2,y2,d) {{
+        if (d===0) return [[x1,y1,x2,y2]];
+        var mx=(x1+x2)/2+(Math.random()-0.5)*0.14, my=(y1+y2)/2+(Math.random()-0.5)*0.04;
+        var s=[].concat(makeBolt(x1,y1,mx,my,d-1)).concat(makeBolt(mx,my,x2,y2,d-1));
+        if (d>1 && Math.random()<0.45) {{
+          var bx=mx+(Math.random()-0.3)*0.18, by=my+Math.random()*0.18;
+          s=s.concat(makeBolt(mx,my,bx,by,d-2));
         }}
-        resize();
-        window.addEventListener('resize', resize);
-
-        for (var i = 0; i < NUM; i++) {{
-          drops.push({{
-            x: Math.random() * window.innerWidth,
-            y: Math.random() * window.innerHeight,
-            len: 8 + Math.random() * 18,
-            speed: 2 + Math.random() * 4,
-            opacity: 0.1 + Math.random() * 0.4
-          }});
-        }}
-
-        function draw() {{
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          drops.forEach(function(d) {{
-            ctx.beginPath();
-            ctx.moveTo(d.x, d.y);
-            ctx.lineTo(d.x - d.len * 0.18, d.y + d.len);
-            ctx.strokeStyle = '{_rain_col}'.replace('0.35)', d.opacity + ')');
-            ctx.lineWidth = 1;
-            ctx.stroke();
-            d.y += d.speed;
-            d.x -= d.speed * 0.18;
-            if (d.y > canvas.height) {{
-              d.y = -d.len;
-              d.x = Math.random() * canvas.width;
-            }}
-          }});
-          requestAnimationFrame(draw);
-        }}
-        draw();
+        return s;
       }}
+
+      /* ── Cloud silhouettes ── */
+      var clouds = [];
+      for (var i=0;i<5;i++) clouds.push(newCloud(true));
+      function newCloud(rand) {{
+        return {{
+          x: rand ? Math.random()*1.8-0.4 : -0.45,
+          y: 0.04 + Math.random()*0.38,
+          spd: 0.000055 + Math.random()*0.00012,
+          sc:  0.9 + Math.random()*1.6,
+          op:  DARK ? 0.035+Math.random()*0.07 : 0.55+Math.random()*0.30,
+        }};
+      }}
+      function drawCloud(cx,cy,sc,op) {{
+        var bx=cx*W, by=cy*H, s=sc*140;
+        X.save();
+        X.globalAlpha = op;
+        X.fillStyle   = DARK ? 'rgba(160,200,255,1)' : 'rgba(255,255,255,1)';
+        X.shadowColor = DARK ? 'rgba(96,165,250,0.6)' : 'rgba(200,230,255,0.9)';
+        X.shadowBlur  = DARK ? 22 : 35;
+        X.beginPath();
+        X.arc(bx,           by,       s*0.48, 0, Math.PI*2);
+        X.arc(bx+s*0.42,   by-s*0.12, s*0.38, 0, Math.PI*2);
+        X.arc(bx-s*0.30,   by+s*0.05, s*0.32, 0, Math.PI*2);
+        X.arc(bx+s*0.75,   by+s*0.08, s*0.30, 0, Math.PI*2);
+        X.arc(bx-s*0.05,   by+s*0.15, s*0.28, 0, Math.PI*2);
+        X.fill();
+        X.restore();
+      }}
+
+      /* ── Glowing particles ── */
+      var pts = [];
+      for (var i=0;i<55;i++) pts.push(newPt());
+      function newPt() {{
+        var cols = DARK
+          ? [[96,165,250],[34,211,238],[167,139,250],[52,211,153]]
+          : [[255,255,255],[186,230,253],[224,242,254],[147,197,253]];
+        var c = cols[Math.floor(Math.random()*cols.length)];
+        return {{
+          x: Math.random(), y: Math.random(),
+          r: 0.8+Math.random()*2.2,
+          vx:(Math.random()-0.5)*0.00025,
+          vy:(Math.random()-0.5)*0.00025,
+          op:0.25+Math.random()*0.65,
+          ph:Math.random()*Math.PI*2,
+          spd:0.012+Math.random()*0.025,
+          c: c,
+        }};
+      }}
+
+      /* ── Shooting stars ── */
+      var shoots = [], shootTimer = 0, shootInterval = 140+Math.random()*200;
+      function newShoot() {{
+        return {{
+          x: Math.random()*0.7, y: Math.random()*0.4,
+          vx: 0.008+Math.random()*0.012,
+          vy: 0.003+Math.random()*0.006,
+          life: 1, decay: 0.03+Math.random()*0.04,
+          len: 0.08+Math.random()*0.10,
+        }};
+      }}
+
+      /* ═══ MAIN DRAW LOOP ═══ */
+      function draw() {{
+        t++;
+        X.clearRect(0,0,W,H);
+
+        /* — Gradient background — */
+        var bg = X.createLinearGradient(0,0,W,H);
+        bg.addColorStop(0, '{_bg0}');
+        bg.addColorStop(0.5, '{_bg1}');
+        bg.addColorStop(1, '{_bg2}');
+        X.fillStyle = bg;
+        X.fillRect(0,0,W,H);
+
+        /* — Mesh gradient orbs — */
+        orbs.forEach(function(o) {{
+          o.x += o.vx + Math.sin(t*0.008+o.y*3)*0.00008;
+          o.y += o.vy + Math.cos(t*0.010+o.x*3)*0.00006;
+          if(o.x<-0.1||o.x>1.1) o.vx*=-1;
+          if(o.y<-0.1||o.y>1.1) o.vy*=-1;
+          var pulse = 1 + Math.sin(t*0.018+o.x*4)*0.12;
+          var g = X.createRadialGradient(o.x*W,o.y*H,0, o.x*W,o.y*H, o.r*Math.min(W,H)*pulse);
+          g.addColorStop(0,'rgba('+o.c[0]+','+o.c[1]+','+o.c[2]+','+(DARK?0.52:0.38)+')');
+          g.addColorStop(0.5,'rgba('+o.c[0]+','+o.c[1]+','+o.c[2]+','+(DARK?0.18:0.10)+')');
+          g.addColorStop(1,'rgba('+o.c[0]+','+o.c[1]+','+o.c[2]+',0)');
+          X.fillStyle = g;
+          X.fillRect(0,0,W,H);
+        }});
+
+        /* — Cloud silhouettes — */
+        clouds.forEach(function(c,i) {{
+          c.x += c.spd;
+          if(c.x>1.5) {{ clouds[i]=newCloud(false); }}
+          drawCloud(c.x, c.y, c.sc, c.op*(0.7+0.3*Math.sin(t*0.005+i)));
+        }});
+
+        /* — Neon rain — */
+        rain.forEach(function(d,i) {{
+          d.y += d.spd;
+          d.x -= d.spd*0.22;
+          if(d.y>1.05) {{ rain[i]=newDrop(false); return; }}
+          X.save();
+          if(d.glow) {{ X.shadowColor='rgba(96,165,250,0.9)'; X.shadowBlur=8; }}
+          var rc = DARK ? '147,197,253' : '255,255,255';
+          var grad = X.createLinearGradient(d.x*W, d.y*H, d.x*W - d.len*W*0.22, (d.y+d.len)*H);
+          grad.addColorStop(0,'rgba('+rc+',0)');
+          grad.addColorStop(1,'rgba('+rc+','+d.op+')');
+          X.strokeStyle = grad;
+          X.lineWidth   = d.w;
+          X.lineCap     = 'round';
+          X.beginPath();
+          X.moveTo(d.x*W, d.y*H);
+          X.lineTo(d.x*W - d.len*W*0.22, (d.y+d.len)*H);
+          X.stroke();
+          X.restore();
+        }});
+
+        /* — Shooting stars — */
+        shootTimer++;
+        if(shootTimer>shootInterval) {{
+          shoots.push(newShoot());
+          shootTimer=0;
+          shootInterval=140+Math.random()*200;
+        }}
+        shoots = shoots.filter(function(s) {{
+          X.save();
+          X.globalAlpha = s.life*0.9;
+          X.strokeStyle = DARK?'rgba(255,255,255,1)':'rgba(255,255,255,0.95)';
+          X.shadowColor = 'rgba(200,230,255,1)';
+          X.shadowBlur  = 12;
+          X.lineWidth   = 1.5;
+          X.beginPath();
+          X.moveTo(s.x*W, s.y*H);
+          X.lineTo((s.x-s.len)*W, (s.y-s.len*0.4)*H);
+          X.stroke();
+          X.restore();
+          s.x+=s.vx; s.y+=s.vy; s.life-=s.decay;
+          return s.life>0;
+        }});
+
+        /* — Lightning — */
+        bTimer++;
+        if(bTimer>bInterval) {{
+          var lx=0.2+Math.random()*0.6;
+          bolt=makeBolt(lx,0,lx+(Math.random()-0.5)*0.25,0.65,6);
+          bFlash=14; bTimer=0; bInterval=200+Math.random()*420;
+        }}
+        if(bolt&&bFlash>0) {{
+          X.fillStyle='rgba(180,220,255,'+(bFlash/14*0.18)+')';
+          X.fillRect(0,0,W,H);
+          var alpha=bFlash/14;
+          bolt.forEach(function(seg) {{
+            X.save();
+            X.strokeStyle='rgba(255,255,255,'+alpha+')';
+            X.lineWidth  = bFlash>8?2.5:1.2;
+            X.shadowColor='rgba(147,197,253,1)';
+            X.shadowBlur = bFlash>8?30:14;
+            X.lineCap='round';
+            X.beginPath();
+            X.moveTo(seg[0]*W,seg[1]*H);
+            X.lineTo(seg[2]*W,seg[3]*H);
+            X.stroke();
+            X.restore();
+          }});
+          bFlash-=1.8;
+          if(bFlash<=0) bolt=null;
+        }}
+
+        /* — Glowing particles — */
+        pts.forEach(function(p) {{
+          p.x+=p.vx+Math.sin(t*0.007+p.ph)*0.00012;
+          p.y+=p.vy+Math.cos(t*0.009+p.ph)*0.00010;
+          if(p.x<0||p.x>1) p.vx*=-1;
+          if(p.y<0||p.y>1) p.vy*=-1;
+          p.ph+=p.spd;
+          var pop=p.op*(0.45+0.55*Math.sin(p.ph));
+          X.save();
+          X.fillStyle  ='rgba('+p.c[0]+','+p.c[1]+','+p.c[2]+','+pop+')';
+          X.shadowColor='rgba('+p.c[0]+','+p.c[1]+','+p.c[2]+',0.9)';
+          X.shadowBlur = 10;
+          X.beginPath();
+          X.arc(p.x*W,p.y*H,p.r,0,Math.PI*2);
+          X.fill();
+          X.restore();
+        }});
+
+        requestAnimationFrame(draw);
+      }}
+      draw();
     }})();
     </script>
     """, unsafe_allow_html=True)
+
 
     # ── Top spacer (~25% viewport height) ──
     st.markdown("<div style='height:18vh;'></div>", unsafe_allow_html=True)
